@@ -526,6 +526,8 @@ public class Main extends Application {
         );
 
         ordersTable.setItems(ordersData);
+
+        ordersTable.setPlaceholder(new Label("Таблица пуста"));
     }
 
     private void createProductsTable() {
@@ -554,6 +556,8 @@ public class Main extends Application {
         );
 
         productsTable.setItems(productsData);
+
+        productsTable.setPlaceholder(new Label("Таблица пуста"));
     }
 
 
