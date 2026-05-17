@@ -1,6 +1,19 @@
+import javafx.application.Application;
+import javafx.beans.property.ReadOnlyObjectWrapper;
+import javafx.beans.property.ReadOnlyStringWrapper;
+import javafx.collections.FXCollections;
+import javafx.collections.ObservableList;
+import javafx.geometry.Insets;
+import javafx.scene.Scene;
+import javafx.scene.control.*;
+import javafx.scene.layout.*;
+import javafx.stage.FileChooser;
+import javafx.stage.Stage;
+import javafx.scene.control.TableColumn;
+import javafx.scene.control.TableView;
+
 import java.io.*;
 import java.time.LocalDate;
-import java.util.Scanner;
 
 // Ошибки
 class OrderNotFoundException extends RuntimeException {
@@ -21,121 +34,76 @@ class OrderAlreadyExistsException extends RuntimeException {
     }
 }
 
-class OrderRemoveException extends RuntimeException {
-    public OrderRemoveException(String msg) {
-        super(msg);
-    }
-}
-
 // Интернет-магазин (агрегатор)
 class Store {
-    private OrdersList ordersList;
-    private ProductList catalog;
-
-    public Store() {
-        ordersList = new OrdersList();
-        catalog = new ProductList();
-    }
-
-    public void addProductToCatalog(Product product) {
-        catalog.addProduct(product);
-    }
+    private OrdersList ordersList = new OrdersList();
+    private ProductList catalog = new ProductList();
 
     public ProductList getCatalog() {
         return catalog;
-    }
-
-    public void setCatalog(ProductList catalog) {
-        this.catalog = catalog;
-    }
-
-    public void printCatalog() {
-        System.out.println("Каталог:");
-        catalog.printProducts();
-    }
-
-    public Product getProduct(String name) {
-        return catalog.findProduct(name);
     }
 
     public OrdersList getOrdersList() {
         return ordersList;
     }
 
+    public void setCatalog(ProductList catalog) {
+        this.catalog = catalog;
+    }
+
     public void setOrdersList(OrdersList ordersList) {
         this.ordersList = ordersList;
     }
 
+    public Product getProduct(String name) {
+        return catalog.findProduct(name);
+    }
+
     public void createOrder(String surname, String productName) {
 
-        if (ordersList.findOrder(surname) != null) {
-            throw new OrderAlreadyExistsException(
-                    "Заказ уже существует для фамилии: " + surname
-            );
-        }
+        if (ordersList.findOrder(surname) != null)
+            throw new OrderAlreadyExistsException("Заказ уже существует");
 
-        Product product = getProduct(productName);
+        Product p = getProduct(productName);
 
-        if (product == null)
-            throw new ProductNotFoundException("Товар не найден: " + productName);
+        if (p == null)
+            throw new ProductNotFoundException("Товар не найден");
 
-        ordersList.addOrder(new Order(surname, LocalDate.now(), product));
+        ordersList.addOrder(
+                new Order(surname, LocalDate.now(), p)
+        );
     }
 
     public void addProductToOrder(String surname, String productName) {
         Order order = ordersList.findOrder(surname);
 
         if (order == null)
-            throw new OrderNotFoundException("Заказ не найден: " + surname);
+            throw new OrderNotFoundException("Заказ не найден");
 
-        Product product = getProduct(productName);
+        Product p = getProduct(productName);
 
-        if (product == null)
-            throw new ProductNotFoundException("Товар не найден: " + productName);
+        if (p == null)
+            throw new ProductNotFoundException("Товар не найден");
 
-        order.addProduct(product);
+        order.addProduct(p);
     }
 
     public void removeProductFromOrder(String surname, String productName) {
         Order order = ordersList.findOrder(surname);
 
         if (order == null)
-            throw new OrderNotFoundException("Заказ не найден: " + surname);
+            throw new OrderNotFoundException("Заказ не найден");
 
         order.removeProduct(productName);
 
         if (order.getProducts().isEmpty()) {
             ordersList.removeOrder(surname);
-            System.out.println("Заказ удалён (был пуст)");
         }
     }
 
     public void removeOrder(String surname) {
-        boolean removed = ordersList.removeOrder(surname);
-
-        if (!removed) {
-            throw new OrderNotFoundException("Нельзя удалить: заказ не найден для " + surname);
-        }
-    }
-
-    public Order findOrder(String surname) {
-        return ordersList.findOrder(surname);
-    }
-
-    public double calculateCost() {
-        return ordersList.calculateCost();
-    }
-
-    public void printAll() {
-        if (ordersList.getSize() == 0) {
-            System.out.println("Нет заказов.");
-            return;
-        }
-
-        for (int i = 0; i < ordersList.getSize(); i++) {
-            ordersList.getOrderByIndex(i).printOrder();
-            System.out.println("------------------");
-        }
+        if (!ordersList.removeOrder(surname))
+            throw new OrderNotFoundException("Заказ не найден");
     }
 }
 
@@ -150,7 +118,6 @@ class OrdersList {
         orders = newArr;
     }
 
-    // TODO
     public void addOrder(Order order) {
         if (size == orders.length) resize();
 
@@ -220,8 +187,8 @@ class Order {
     public Order(String surname, LocalDate date, Product firstProduct) {
         this.surname = surname;
         this.date = date;
-        this.products = new ProductList();
-        this.products.addProduct(firstProduct);
+        products = new ProductList();
+        products.addProduct(firstProduct);
     }
 
     public String getCustomerSurname() {
@@ -248,11 +215,18 @@ class Order {
         return products.calculateCost();
     }
 
-    public void printOrder() {
-        System.out.println("Фамилия: " + surname);
-        System.out.println("Дата: " + date);
-        products.printProducts();
-        System.out.println("Сумма: " + calculateCost());
+    public int getProductsCount() {
+
+        int count = 0;
+
+        ProductNode cur = products.getHead();
+
+        while (cur != null) {
+            count++;
+            cur = cur.getNext();
+        }
+
+        return count;
     }
 }
 
@@ -353,16 +327,6 @@ class ProductList {
         return sum;
     }
 
-    public void printProducts() {
-        ProductNode cur = head;
-
-        while (cur != null) {
-            System.out.println("- " + cur.getData().getName() +
-                    " (" + cur.getData().getPrice() + ")");
-            cur = cur.getNext();
-        }
-    }
-
     public boolean isEmpty() {
         return head == null;
     }
@@ -417,166 +381,549 @@ class Product {
     }
 }
 
-// Исполняемый клас
-public class Main {
+public class Main extends Application {
 
-    private static Scanner scanner = new Scanner(System.in);
-    private static Store store = new Store();
+    private Store store = new Store();
+
+    private TableView<Order> ordersTable = new TableView<>();
+    private TableView<Product> productsTable = new TableView<>();
+
+    private ObservableList<Order> ordersData =
+            FXCollections.observableArrayList();
+
+    private ObservableList<Product> productsData =
+            FXCollections.observableArrayList();
+
+    private Label totalLabel = new Label("Общая стоимость: 0");
+
+    @Override
+    public void start(Stage stage) {
+
+        store.setCatalog(
+            loadCatalog("catalog.txt")
+        );
+        createOrdersTable();
+        createProductsTable();
+        loadOrdersToTable();
+
+        ordersTable.getSelectionModel()
+                .selectedItemProperty()
+                .addListener((obs, oldOrder, newOrder) -> {
+
+                    productsData.clear();
+
+                    if (newOrder != null) {
+
+                        ProductNode cur =
+                                newOrder.getProducts().getHead();
+
+                        while (cur != null) {
+
+                            productsData.add(cur.getData());
+
+                            cur = cur.getNext();
+                        }
+                    }
+                });
+
+        Button addOrderBtn = new Button("Добавить заказ");
+        Button removeOrderBtn = new Button("Удалить заказ");
+
+        Button addProductBtn = new Button("Добавить товар");
+        Button removeProductBtn = new Button("Удалить товар");
+
+        Button saveBtn = new Button("Сохранить");
+        Button loadBtn = new Button("Открыть файл с заказами");
+
+        Button showCatalogBtn = new Button("Показать каталог");
+
+        showCatalogBtn.setOnAction(e -> showCatalog());
+
+        addOrderBtn.setOnAction(e -> addOrder());
+        removeOrderBtn.setOnAction(e -> removeOrder());
+
+        addProductBtn.setOnAction(e -> addProduct());
+        removeProductBtn.setOnAction(e -> removeProduct());
+
+        saveBtn.setOnAction(e -> save(stage));
+        loadBtn.setOnAction(e -> load(stage));
+
+        HBox buttons = new HBox(
+                10,
+                addOrderBtn,
+                removeOrderBtn,
+                addProductBtn,
+                removeProductBtn,
+                saveBtn,
+                loadBtn,
+                showCatalogBtn
+        );
+
+        VBox root = new VBox(
+                10,
+                new Label("Заказы"),
+                ordersTable,
+                new Label("Товары заказа"),
+                productsTable,
+                totalLabel,
+                buttons
+        );
+
+        root.setPadding(new Insets(10));
+
+        Scene scene = new Scene(root, 900, 600);
+
+        stage.setTitle("Интернет-магазин");
+        stage.setScene(scene);
+        stage.show();
+
+        refreshTotal();
+    }
+
+    private void createOrdersTable() {
+
+        TableColumn<Order, String> surnameCol =
+                new TableColumn<>("Фамилия");
+
+        surnameCol.setCellValueFactory(data ->
+                new ReadOnlyStringWrapper(
+                        data.getValue().getCustomerSurname()
+                )
+        );
+
+        TableColumn<Order, String> dateCol =
+                new TableColumn<>("Дата");
+
+        dateCol.setCellValueFactory(data ->
+                new ReadOnlyStringWrapper(
+                        data.getValue().getDate().toString()
+                )
+        );
+
+        TableColumn<Order, Integer> countCol =
+                new TableColumn<>("Кол-во");
+
+        countCol.setCellValueFactory(data ->
+                new ReadOnlyObjectWrapper<>(
+                        data.getValue().getProductsCount()
+                )
+        );
+
+        TableColumn<Order, Double> costCol =
+                new TableColumn<>("Сумма");
+
+        costCol.setCellValueFactory(data ->
+                new ReadOnlyObjectWrapper<>(
+                        data.getValue().calculateCost()
+                )
+        );
+
+        ordersTable.getColumns().addAll(
+                surnameCol,
+                dateCol,
+                countCol,
+                costCol
+        );
+
+        ordersTable.setItems(ordersData);
+    }
+
+    private void createProductsTable() {
+
+        TableColumn<Product, String> nameCol =
+                new TableColumn<>("Название");
+
+        nameCol.setCellValueFactory(data ->
+                new ReadOnlyStringWrapper(
+                        data.getValue().getName()
+                )
+        );
+
+        TableColumn<Product, Double> priceCol =
+                new TableColumn<>("Цена");
+
+        priceCol.setCellValueFactory(data ->
+                new ReadOnlyObjectWrapper<>(
+                        data.getValue().getPrice()
+                )
+        );
+
+        productsTable.getColumns().addAll(
+                nameCol,
+                priceCol
+        );
+
+        productsTable.setItems(productsData);
+    }
+
+
+    private void loadOrdersToTable() {
+
+        ordersData.clear();
+
+        for (int i = 0; i < store.getOrdersList().getSize(); i++) {
+
+            ordersData.add(
+                    store.getOrdersList().getOrderByIndex(i)
+            );
+        }
+
+        refreshTotal();
+    }
+
+    private void addOrder() {
+
+        Dialog<ButtonType> dialog = new Dialog<>();
+
+        dialog.setTitle("Добавление заказа");
+
+        TextField surnameField = new TextField();
+        surnameField.setPromptText("Фамилия");
+
+        // ФИЛЬТР ТОЛЬКО БУКВЫ
+        surnameField.textProperty().addListener((obs, oldV, newV) -> {
+
+            if (!newV.matches("[а-яА-Яa-zA-Z]*")) {
+                surnameField.setText(oldV);
+            }
+        });
+
+        TextField productField = new TextField();
+        productField.setPromptText("Товар");
+
+        VBox box = new VBox(10, surnameField, productField);
+
+        dialog.getDialogPane().setContent(box);
+
+        dialog.getDialogPane().getButtonTypes().addAll(
+                ButtonType.OK,
+                ButtonType.CANCEL
+        );
+
+        dialog.showAndWait().ifPresent(btn -> {
+
+            if (btn == ButtonType.OK) {
+
+                try {
+
+                    store.createOrder(
+                            surnameField.getText(),
+                            productField.getText()
+                    );
+
+                    loadOrdersToTable();
+
+                } catch (RuntimeException ex) {
+                    error(ex.getMessage());
+                }
+            }
+        });
+    }
+
+    private void removeOrder() {
+
+        Order selected =
+                ordersTable.getSelectionModel().getSelectedItem();
+
+        if (selected == null) {
+            error("Выберите заказ");
+            return;
+        }
+
+        store.removeOrder(selected.getCustomerSurname());
+
+        productsData.clear();
+
+        loadOrdersToTable();
+    }
+
+    private void addProduct() {
+
+        Order selected =
+                ordersTable.getSelectionModel().getSelectedItem();
+
+        if (selected == null) {
+            error("Выберите заказ");
+            return;
+        }
+
+        TextInputDialog dialog = new TextInputDialog();
+
+        dialog.setTitle("Добавить товар");
+
+        dialog.setHeaderText("Введите название товара");
+
+        dialog.showAndWait().ifPresent(name -> {
+
+            try {
+
+                store.addProductToOrder(
+                        selected.getCustomerSurname(),
+                        name
+                );
+
+                refreshProducts(selected);
+
+                ordersTable.refresh();
+
+                refreshTotal();
+
+            } catch (RuntimeException ex) {
+                error(ex.getMessage());
+            }
+        });
+    }
+
+    private void removeProduct() {
+
+        Order selectedOrder =
+                ordersTable.getSelectionModel().getSelectedItem();
+
+        Product selectedProduct =
+                productsTable.getSelectionModel().getSelectedItem();
+
+        if (selectedOrder == null ||
+                selectedProduct == null) {
+
+            error("Выберите товар");
+            return;
+        }
+
+        store.removeProductFromOrder(
+                selectedOrder.getCustomerSurname(),
+                selectedProduct.getName()
+        );
+
+        Order order =
+                store.getOrdersList()
+                        .findOrder(selectedOrder.getCustomerSurname());
+
+        if (order == null) {
+
+            productsData.clear();
+
+        } else {
+
+            refreshProducts(order);
+        }
+
+        ordersTable.refresh();
+
+        refreshTotal();
+    }
+
+    private void refreshProducts(Order order) {
+
+        productsData.clear();
+
+        ProductNode cur =
+                order.getProducts().getHead();
+
+        while (cur != null) {
+
+            productsData.add(cur.getData());
+
+            cur = cur.getNext();
+        }
+    }
+
+    private void refreshTotal() {
+
+        totalLabel.setText(
+                "Общая стоимость: " +
+                        store.getOrdersList().calculateCost()
+        );
+    }
+
+    private void error(String msg) {
+
+        Alert alert =
+                new Alert(Alert.AlertType.ERROR);
+
+        alert.setHeaderText(null);
+
+        alert.setContentText(msg);
+
+        alert.showAndWait();
+    }
+
+    private void save(Stage stage) {
+
+        FileChooser chooser = new FileChooser();
+
+        chooser.setTitle("Сохранить");
+
+        File file = chooser.showSaveDialog(stage);
+
+        if (file == null)
+            return;
+
+        try (PrintWriter w =
+                     new PrintWriter(new FileWriter(file))) {
+
+            for (int i = 0;
+                 i < store.getOrdersList().getSize();
+                 i++) {
+
+                Order o =
+                        store.getOrdersList()
+                                .getOrderByIndex(i);
+
+                StringBuilder sb = new StringBuilder();
+
+                sb.append(o.getCustomerSurname())
+                        .append(";")
+                        .append(o.getDate());
+
+                ProductNode cur =
+                        o.getProducts().getHead();
+
+                while (cur != null) {
+
+                    Product p = cur.getData();
+
+                    sb.append(";")
+                            .append(p.getName())
+                            .append(",")
+                            .append(p.getPrice());
+
+                    cur = cur.getNext();
+                }
+
+                w.println(sb);
+            }
+
+        } catch (IOException e) {
+
+            error("Ошибка сохранения");
+        }
+    }
+
+    private void load(Stage stage) {
+
+        FileChooser chooser = new FileChooser();
+
+        chooser.setTitle("Открыть");
+
+        File file = chooser.showOpenDialog(stage);
+
+        if (file == null)
+            return;
+
+        OrdersList orders = new OrdersList();
+
+        try (BufferedReader r =
+                     new BufferedReader(
+                             new FileReader(file))) {
+
+            String line;
+
+            while ((line = r.readLine()) != null) {
+
+                String[] parts = line.split(";");
+
+                String surname = parts[0];
+
+                LocalDate date =
+                        LocalDate.parse(parts[1]);
+
+                String[] first =
+                        parts[2].split(",");
+
+                Product firstProduct =
+                        new Product(
+                                first[0],
+                                Double.parseDouble(first[1])
+                        );
+
+                Order order =
+                        new Order(
+                                surname,
+                                date,
+                                firstProduct
+                        );
+
+                for (int i = 3;
+                     i < parts.length;
+                     i++) {
+
+                    String[] p =
+                            parts[i].split(",");
+
+                    order.addProduct(
+                            new Product(
+                                    p[0],
+                                    Double.parseDouble(p[1])
+                            )
+                    );
+                }
+
+                orders.addOrder(order);
+            }
+
+            store.setOrdersList(orders);
+
+            loadOrdersToTable();
+
+            if (!ordersData.isEmpty()) {
+
+                ordersTable.getSelectionModel().selectFirst();
+
+                refreshProducts(
+                        ordersData.get(0)
+                );
+            }
+
+            productsData.clear();
+
+        } catch (IOException e) {
+
+            error("Ошибка загрузки");
+        }
+    }
+
+    private void showCatalog() {
+
+        TableView<Product> table = new TableView<>();
+        ObservableList<Product> data = FXCollections.observableArrayList();
+
+        // Заполняем таблицу товарами из каталога
+        ProductNode cur = store.getCatalog().getHead();
+        while (cur != null) {
+            data.add(cur.getData());
+            cur = cur.getNext();
+        }
+
+        TableColumn<Product, String> nameCol = new TableColumn<>("Название");
+        nameCol.setCellValueFactory(cell ->
+                new ReadOnlyStringWrapper(
+                        cell.getValue().getName()
+                )
+        );
+
+
+        TableColumn<Product, Double> priceCol = new TableColumn<>("Цена");
+        priceCol.setCellValueFactory(cell ->
+                new ReadOnlyObjectWrapper<>(
+                        cell.getValue().getPrice()
+                )
+        );
+
+        table.getColumns().addAll(nameCol, priceCol);
+        table.setItems(data);
+
+        // Создаем окно
+        Stage catalogStage = new Stage();
+        VBox root = new VBox(10, new Label("Каталог товаров"), table);
+        root.setPadding(new Insets(10));
+        Scene scene = new Scene(root, 400, 300);
+        catalogStage.setTitle("Каталог");
+        catalogStage.setScene(scene);
+        catalogStage.show();
+    }
 
     public static void main(String[] args) {
-
-        String catalogFile = readValidFile("Файл каталога");
-        String ordersFile = readValidFile("Файл заказов");
-
-        store.setCatalog(loadCatalog(catalogFile));
-        store.setOrdersList(loadOrders(ordersFile));
-
-        while (true) {
-            menu();
-            int c = scanner.nextInt();
-            scanner.nextLine();
-
-            switch (c) {
-                case 1 -> addOrder();
-                case 2 -> removeOrder();
-                case 3 -> findOrder();
-                case 4 -> addProduct();
-                case 5 -> removeProduct();
-                case 6 -> store.printAll();
-                case 7 -> System.out.println(store.calculateCost());
-                case 8 -> store.printCatalog();
-
-                case 9 -> {
-                    saveCatalog(store.getCatalog(), catalogFile);
-                    saveOrders(store.getOrdersList(), ordersFile);
-                    System.out.println("Сохранено!");
-                }
-
-                case 0 -> {
-                    saveCatalog(store.getCatalog(), catalogFile);
-                    saveOrders(store.getOrdersList(), ordersFile);
-                    return;
-                }
-            }
-        }
-    }
-
-    private static String readValidFile(String title) {
-        while (true) {
-            System.out.print(title + ": ");
-            String file = scanner.nextLine();
-
-            File f = new File(file);
-
-            if (!f.exists() || !f.isFile()) {
-                System.out.println("❌ Файл не найден. Попробуйте снова.");
-                continue;
-            }
-
-            if (!f.canRead()) {
-                System.out.println("❌ Нет прав на чтение файла. Попробуйте снова.");
-                continue;
-            }
-
-            return file;
-        }
-    }
-
-    private static void addOrder() {
-        try {
-            System.out.print("Фамилия: ");
-            String s = scanner.nextLine();
-
-            store.printCatalog();
-
-            System.out.print("Товар: ");
-            String p = scanner.nextLine();
-
-            store.createOrder(s, p);
-
-            System.out.println("OK");
-
-        } catch (RuntimeException e) {
-            System.out.println(e.getMessage());
-        }
-    }
-
-    private static void addProduct() {
-        try {
-            System.out.print("Фамилия: ");
-            String s = scanner.nextLine();
-
-            store.printCatalog();
-
-            System.out.print("Товар: ");
-            String p = scanner.nextLine();
-
-            store.addProductToOrder(s, p);
-
-            System.out.println("Добавлено");
-
-        } catch (RuntimeException e) {
-            System.out.println(e.getMessage());
-        }
-    }
-
-    private static void removeProduct() {
-        try {
-            System.out.print("Фамилия: ");
-            String s = scanner.nextLine();
-
-            System.out.print("Товар: ");
-            String p = scanner.nextLine();
-
-            store.removeProductFromOrder(s, p);
-
-            System.out.println("Готово");
-
-        } catch (RuntimeException e) {
-            System.out.println(e.getMessage());
-        }
-    }
-
-    private static void findOrder() {
-        try {
-            System.out.print("Фамилия: ");
-            Order o = store.findOrder(scanner.nextLine());
-
-            if (o == null)
-                throw new OrderNotFoundException("Заказ не найден");
-
-            o.printOrder();
-
-        } catch (RuntimeException e) {
-            System.out.println(e.getMessage());
-        }
-    }
-
-    private static void removeOrder() {
-        try {
-            System.out.print("Фамилия: ");
-            String s = scanner.nextLine();
-
-            store.removeOrder(s);
-
-            System.out.println("Заказ удалён");
-
-        } catch (RuntimeException e) {
-            System.out.println(e.getMessage());
-        }
-    }
-
-    private static void menu() {
-        System.out.println("\n1. Создать заказ");
-        System.out.println("2. Удалить заказ");
-        System.out.println("3. Найти заказ");
-        System.out.println("4. Добавить товар");
-        System.out.println("5. Удалить товар");
-        System.out.println("6. Показать все заказы");
-        System.out.println("7. Общая стоимость");
-        System.out.println("8. Каталог");
-        System.out.println("9. Сохранить");
-        System.out.println("0. Выход");
+        launch(args);
     }
 
     private static ProductList loadCatalog(String file) {
@@ -626,53 +973,5 @@ public class Main {
         }
 
         return orders;
-    }
-
-    private static void saveCatalog(ProductList catalog, String file) {
-        try (PrintWriter w = new PrintWriter(new FileWriter(file))) {
-
-            ProductNode cur = catalog.getHead();
-
-            while (cur != null) {
-                Product p = cur.getData();
-                w.println(p.getName() + ";" + p.getPrice());
-                cur = cur.getNext();
-            }
-
-        } catch (IOException e) {
-            System.out.println("Ошибка сохранения каталога: " + e.getMessage());
-        }
-    }
-
-    private static void saveOrders(OrdersList orders, String file) {
-        try (PrintWriter w = new PrintWriter(new FileWriter(file))) {
-
-            for (int i = 0; i < orders.getSize(); i++) {
-
-                Order o = orders.getOrderByIndex(i);
-
-                StringBuilder sb = new StringBuilder();
-                sb.append(o.getCustomerSurname())
-                        .append(";")
-                        .append(o.getDate());
-
-                ProductNode cur = o.getProducts().getHead();
-
-                while (cur != null) {
-                    Product p = cur.getData();
-                    sb.append(";")
-                            .append(p.getName())
-                            .append(",")
-                            .append(p.getPrice());
-
-                    cur = cur.getNext();
-                }
-
-                w.println(sb);
-            }
-
-        } catch (IOException e) {
-            System.out.println("Ошибка сохранения заказов: " + e.getMessage());
-        }
     }
 }
