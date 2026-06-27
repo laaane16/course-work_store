@@ -2,5 +2,7 @@
 *.class
 *.txt
 *.docx
+dist/
+Store.app/
 
 !Main.java
